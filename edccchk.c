@@ -18,8 +18,54 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "banner.h"
 #include "common.h"
+#include <stdio.h>
+#define CSV_FILENAME "edccchk_out.csv"
+static FILE *csv_file = NULL;
+
+static void open_csv_file() {
+    csv_file = fopen(CSV_FILENAME, "a"); // Open file in "append" mode
+    if (!csv_file) {
+        perror("Error opening CSV file");
+        exit(EXIT_FAILURE);
+    }
+    // Write CSV header only if file is newly created
+    if (ftell(csv_file) == 0) {
+        fprintf(csv_file, "Filename,Non-data sectors,Mode 0 sectors,Mode 0 sectors with errors,Mode 1 sectors,Mode 1 sectors with errors,Mode 2 form 1 sectors,Mode 2 form 1 sectors with errors,Mode 2 form 1 sectors with warnings,Mode 2 form 2 sectors,Mode 2 form 2 sectors with errors,Mode 2 form 2 sectors with warnings,Filled sectors,Total sectors,Total errors,Total warnings,Mode 1 - ECC P Errors,Mode 1 - ECC Q Errors,Mode 1 - EDC Errors,Mode 2 Form 1 - ECC P Errors,Mode 2 Form 1 - ECC Q Errors,Mode 2 Form 1 - EDC Errors,Mode 2 Form 2 - EDC Errors,Total ECC P Errors,Total ECC Q Errors,Total EDC Errors\n");
+    }
+}
+
+static void close_csv_file() {
+    if (csv_file) {
+        fclose(csv_file);
+        csv_file = NULL;
+    }
+}
+
+static void write_csv_row(const char *filename,
+                          uint32_t nondatasectors, uint32_t mode0sectors, uint32_t mode0errors,
+                          uint32_t mode1sectors, uint32_t mode1errors,
+                          uint32_t mode2f1sectors, uint32_t mode2f1errors, uint32_t mode2f1warnings,
+                          uint32_t mode2f2sectors, uint32_t mode2f2errors, uint32_t mode2f2warnings,
+                          uint32_t filledsectors, uint32_t totalsectors,
+                          uint32_t totalerrors, uint32_t totalwarnings,
+                          uint32_t mode1_ecc_p_err, uint32_t mode1_ecc_q_err, uint32_t mode1_edc_err,
+                          uint32_t mode2f1_ecc_p_err, uint32_t mode2f1_ecc_q_err, uint32_t mode2f1_edc_err,
+                          uint32_t mode2f2_edc_err,
+                          uint32_t total_ecc_p_err, uint32_t total_ecc_q_err, uint32_t total_edc_err) {
+    fprintf(csv_file, "%s,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\n",
+            filename,
+            nondatasectors, mode0sectors, mode0errors,
+            mode1sectors, mode1errors,
+            mode2f1sectors, mode2f1errors, mode2f1warnings,
+            mode2f2sectors, mode2f2errors, mode2f2warnings,
+            filledsectors, totalsectors,
+            totalerrors, totalwarnings,
+            mode1_ecc_p_err, mode1_ecc_q_err, mode1_edc_err,
+            mode2f1_ecc_p_err, mode2f1_ecc_q_err, mode2f1_edc_err,
+            mode2f2_edc_err,
+            total_ecc_p_err, total_ecc_q_err, total_edc_err);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -101,6 +147,21 @@ static uint32_t totalsectors;
 static uint32_t totalerrors;
 static uint32_t totalwarnings;
 static uint32_t filledsectors;
+
+// ehw addition
+static uint32_t	total_ecc_p_err;
+static uint32_t	total_ecc_q_err;
+static uint32_t	total_edc_err;
+	
+static uint32_t	mode1_ecc_p_err;
+static uint32_t	mode1_ecc_q_err;
+static uint32_t	mode1_edc_err;
+	
+static uint32_t	mode2f1_ecc_p_err;
+static uint32_t	mode2f1_ecc_q_err;
+static uint32_t	mode2f1_edc_err;
+	
+static uint32_t	mode2f2_edc_err;
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -280,20 +341,35 @@ static int8_t ecmify(const char *infilename)
 
     resetcounter(input_file_length);
 
-    nondatasectors  = 0;
-    mode0sectors    = 0;
-    mode0errors     = 0;
-    mode1sectors    = 0;
-    mode1errors     = 0;
-    mode2f1sectors  = 0;
-    mode2f1errors   = 0;
-    mode2f1warnings = 0;
-    mode2f2sectors  = 0;
-    mode2f2errors   = 0;
-    mode2f2warnings = 0;
-    totalsectors    = 0;
-    totalerrors     = 0;
-    filledsectors   = 0;
+    nondatasectors    = 0;
+    mode0sectors      = 0;
+    mode0errors       = 0;
+    mode1sectors      = 0;
+    mode1errors       = 0;
+    mode2f1sectors    = 0;
+    mode2f1errors     = 0;
+    mode2f1warnings   = 0;
+    mode2f2sectors    = 0;
+    mode2f2errors     = 0;
+    mode2f2warnings   = 0;
+    totalsectors      = 0;
+    totalerrors       = 0;
+    filledsectors     = 0;
+	
+	// ehw addition
+	total_ecc_p_err   = 0;
+	total_ecc_q_err   = 0;
+	total_edc_err     = 0;
+	
+	mode1_ecc_p_err   = 0;
+	mode1_ecc_q_err   = 0;
+	mode1_edc_err     = 0;
+	
+	mode2f1_ecc_p_err = 0;
+	mode2f1_ecc_q_err = 0;
+	mode2f1_edc_err   = 0;
+	
+	mode2f2_edc_err   = 0;
 
     DPRINTF("ecmify(): Entering main loop.\n");
     for(;;)
@@ -369,10 +445,12 @@ static int8_t ecmify(const char *infilename)
                         mode0errors++;
                         totalerrors++;
                         fprintf(stderr,
-                                "Mode 0 sector with error at address: %02X:%02X:%02X\n",
-                                sector[0x00C],
-                                sector[0x00D],
-                                sector[0x00E]);
+                                "Mode 0 sector with error at address: %02X:%02X:%02X (LBA: %d / File Address: %06X)\n",
+							sector[0x00C],
+							sector[0x00D],
+							sector[0x00E],
+							(((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F)),
+							((((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F))) * 2352);
                         break;
                     }
                 }
@@ -392,17 +470,26 @@ static int8_t ecmify(const char *infilename)
                 {
                     mode1errors++;
                     totalerrors++;
-                    fprintf(stderr,
-                            "Mode 1 sector with error at address: %02X:%02X:%02X\n",
-                            sector[0x00C],
-                            sector[0x00D],
-                            sector[0x00E]);
+					fprintf(stderr,
+							"Mode 1 sector with error at address: %02X:%02X:%02X (LBA: %d / File Address: %06X)\n",
+							sector[0x00C],
+							sector[0x00D],
+							sector[0x00E],
+							(((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F)),
+							((((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F))) * 2352);
+
                     if(edc_compute(0, sector, 0x810) != get32lsb(sector + 0x810))
                         fprintf(stderr, "%02X:%02X:%02X: Failed EDC\n", sector[0x00C], sector[0x00D], sector[0x00E]);
+						total_edc_err++;
+						mode1_edc_err++;
                     if(!ecc_checkpq(sector + 0xC, sector + 0x10, 86, 24, 2, 86, sector + 0x81C))
                         fprintf(stderr, "%02X:%02X:%02X: Failed ECC P\n", sector[0x00C], sector[0x00D], sector[0x00E]);
+						total_ecc_p_err++;
+						mode1_ecc_p_err++;
                     if(!ecc_checkpq(sector + 0xC, sector + 0x10, 52, 43, 86, 88, sector + 0x81C + 0xAC))
                         fprintf(stderr, "%02X:%02X:%02X: Failed ECC Q\n", sector[0x00C], sector[0x00D], sector[0x00E]);
+						total_ecc_q_err++;
+						mode1_ecc_q_err++;
                 }
 
                 filled = 1;
@@ -419,10 +506,12 @@ static int8_t ecmify(const char *infilename)
                 {
                     filledsectors++;
                     fprintf(stderr,
-                            "Mode 1 sector at address: %02X:%02X:%02X is filled with 55h\n",
-                            sector[0x00C],
-                            sector[0x00D],
-                            sector[0x00E]);
+                            "Mode 1 sector at address: %02X:%02X:%02X (LBA: %d / File Address: %06X) is filled with 55h\n",
+							sector[0x00C],
+							sector[0x00D],
+							sector[0x00E],
+							(((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F)),
+							((((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F))) * 2352);
                 }
             }
             else if(sector[0x00F] == 0x02) // mode (1 byte)
@@ -439,13 +528,17 @@ static int8_t ecmify(const char *infilename)
                     if(edc_compute(0, m2sec, 0x91C) != get32lsb(m2sec + 0x91C) && get32lsb(m2sec + 0x91C) != 0)
                     {
                         fprintf(stderr,
-                                "Mode 2 form 2 sector with error at address: %02X:%02X:%02X\n",
-                                sector[0x00C],
-                                sector[0x00D],
-                                sector[0x00E]);
+                                "Mode 2 form 2 sector with error at address: %02X:%02X:%02X (LBA: %d / File Address: %06X)\n",
+								sector[0x00C],
+								sector[0x00D],
+								sector[0x00E],
+								(((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F)),
+								((((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F))) * 2352);
                         if(edc_compute(0, m2sec, 0x91C) != get32lsb(m2sec + 0x91C))
                             fprintf(
                                 stderr, "%02X:%02X:%02X: Failed EDC\n", sector[0x00C], sector[0x00D], sector[0x00E]);
+							total_edc_err++;
+							mode2f2_edc_err++;
                         mode2f2errors++;
                         totalerrors++;
                     }
@@ -455,10 +548,12 @@ static int8_t ecmify(const char *infilename)
                         mode2f2warnings++;
                         totalwarnings++;
                         fprintf(stderr,
-                                "Subheader copies differ in mode 2 form 2 sector at address: %02X:%02X:%02X\n",
-                                sector[0x00C],
-                                sector[0x00D],
-                                sector[0x00E]);
+                                "Subheader copies differ in mode 2 form 2 sector at address: %02X:%02X:%02X (LBA: %d / File Address: %06X)\n",
+								sector[0x00C],
+								sector[0x00D],
+								sector[0x00E],
+								(((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F)),
+								((((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F))) * 2352);
                     }
 
                     filled = 1;
@@ -475,10 +570,12 @@ static int8_t ecmify(const char *infilename)
                     {
                         filledsectors++;
                         fprintf(stderr,
-                                "Mode 2 form 2 sector at address: %02X:%02X:%02X is filled with 55h\n",
-                                sector[0x00C],
-                                sector[0x00D],
-                                sector[0x00E]);
+                                "Mode 2 form 2 sector at address: %02X:%02X:%02X (LBA: %d / File Address: %06X) is filled with 55h\n",
+								sector[0x00C],
+								sector[0x00D],
+								sector[0x00E],
+								(((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F)),
+								((((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F))) * 2352);
                     }
                 }
                 else
@@ -488,19 +585,27 @@ static int8_t ecmify(const char *infilename)
                        edc_compute(0, m2sec, 0x808) != get32lsb(m2sec + 0x808))
                     {
                         fprintf(stderr,
-                                "Mode 2 form 1 sector with error at address: %02X:%02X:%02X\n",
-                                sector[0x00C],
-                                sector[0x00D],
-                                sector[0x00E]);
+                                "Mode 2 form 1 sector with error at address: %02X:%02X:%02X (LBA: %d / File Address: %06X)\n",
+								sector[0x00C],
+								sector[0x00D],
+								sector[0x00E],
+								(((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F)),
+								((((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F))) * 2352);        
                         if(edc_compute(0, m2sec, 0x808) != get32lsb(m2sec + 0x808))
                             fprintf(
                                 stderr, "%02X:%02X:%02X: Failed EDC\n", sector[0x00C], sector[0x00D], sector[0x00E]);
+							total_edc_err++;
+							mode2f1_edc_err++;
                         if(!ecc_checkpq(zeroaddress, m2sec, 86, 24, 2, 86, m2sec + 0x80C))
                             fprintf(
                                 stderr, "%02X:%02X:%02X: Failed ECC P\n", sector[0x00C], sector[0x00D], sector[0x00E]);
+							total_ecc_p_err++;
+							mode2f1_ecc_p_err++;
                         if(!ecc_checkpq(zeroaddress, m2sec, 52, 43, 86, 88, m2sec + 0x80C))
                             fprintf(
                                 stderr, "%02X:%02X:%02X: Failed ECC Q\n", sector[0x00C], sector[0x00D], sector[0x00E]);
+							total_ecc_q_err++;
+							mode2f1_ecc_q_err++;
                         mode2f1errors++;
                         totalerrors++;
                     }
@@ -510,10 +615,12 @@ static int8_t ecmify(const char *infilename)
                         mode2f1warnings++;
                         totalwarnings++;
                         fprintf(stderr,
-                                "Subheader copies differ in mode 2 form 1 sector at address: %02X:%02X:%02X\n",
-                                sector[0x00C],
-                                sector[0x00D],
-                                sector[0x00E]);
+                                "Subheader copies differ in mode 2 form 1 sector at address: %02X:%02X:%02X (LBA: %d / File Address: %06X)\n",
+								sector[0x00C],
+								sector[0x00D],
+								sector[0x00E],
+								(((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F)),
+								((((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F))) * 2352);
                     }
 
                     filled = 1;
@@ -530,10 +637,12 @@ static int8_t ecmify(const char *infilename)
                     {
                         filledsectors++;
                         fprintf(stderr,
-                                "Mode 2 form 1 sector at address: %02X:%02X:%02X is filled with 55h\n",
-                                sector[0x00C],
-                                sector[0x00D],
-                                sector[0x00E]);
+                                "Mode 2 form 1 sector at address: %02X:%02X:%02X (LBA: %d / File Address: %06X) is filled with 55h\n",
+								sector[0x00C],
+								sector[0x00D],
+								sector[0x00E],
+								(((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F)),
+								((((((sector[0x00C] >> 4) * 10) + (sector[0x00C] & 0x0F)) * 60) + (((sector[0x00D] >> 4) * 10) + (sector[0x00D] & 0x0F)) - 2) * 75 + (((sector[0x00E] >> 4) * 10) + (sector[0x00E] & 0x0F))) * 2352);
                     }
                 }
             }
@@ -570,22 +679,46 @@ static int8_t ecmify(const char *infilename)
     //
     // Show report
     //
+	printf("\n-------------------Report:--------------------\n");
     printf("Non-data sectors........ %d\n", nondatasectors);
     printf("Mode 0 sectors.......... %d\n", mode0sectors);
-    printf("\twith errors..... %d\n", mode0errors);
+    printf("\twith errors........... %d\n", mode0errors);
     printf("Mode 1 sectors.......... %d\n", mode1sectors);
-    printf("\twith errors..... %d\n", mode1errors);
+	printf("\twith ECC P errors..... %d\n", mode1_ecc_p_err);
+	printf("\twith ECC Q errors..... %d\n", mode1_ecc_q_err);
+	printf("\twith EDC errors....... %d\n", mode1_edc_err);	
+    printf("\twith errors........... %d\n", mode1errors);
     printf("Mode 2 form 1 sectors... %d\n", mode2f1sectors);
-    printf("\twith errors..... %d\n", mode2f1errors);
-    printf("\twith warnings... %d\n", mode2f1warnings);
+	printf("\twith ECC P errors..... %d\n", mode2f1_ecc_p_err);
+	printf("\twith ECC Q errors..... %d\n", mode2f1_ecc_q_err);
+	printf("\twith EDC errors....... %d\n", mode2f1_edc_err);	
+    printf("\twith errors........... %d\n", mode2f1errors);
+    printf("\twith warnings......... %d\n", mode2f1warnings);
     printf("Mode 2 form 2 sectors... %d\n", mode2f2sectors);
-    printf("\twith errors..... %d\n", mode2f2errors);
-    printf("\twith warnings... %d\n", mode2f2warnings);
+	printf("\twith EDC errors....... %d\n", mode2f2_edc_err);	
+    printf("\twith errors........... %d\n", mode2f2errors);
+    printf("\twith warnings......... %d\n", mode2f2warnings);
     printf("Filled sectors.......... %d\n", filledsectors);
     printf("Total sectors........... %d\n", totalsectors);
     printf("Total errors............ %d\n", totalerrors);
+	printf("\twith ECC P errors..... %d\n", total_ecc_p_err);	
+    printf("\twith ECC Q errors..... %d\n", total_ecc_q_err);
+    printf("\twith EDC errors....... %d\n", total_edc_err);
     printf("Total warnings.......... %d\n", totalwarnings);
     printf("Total errors+warnings... %d\n", totalerrors + totalwarnings);
+	printf("----------------------------------------------\n");
+	
+    write_csv_row(infilename, nondatasectors, mode0sectors, mode0errors,
+                  mode1sectors, mode1errors,
+                  mode2f1sectors, mode2f1errors, mode2f1warnings,
+                  mode2f2sectors, mode2f2errors, mode2f2warnings,
+                  filledsectors, totalsectors,
+                  totalerrors, totalwarnings,
+				  mode1_ecc_p_err, mode1_ecc_q_err, mode1_edc_err,
+				  mode2f1_ecc_p_err, mode2f1_ecc_q_err, mode2f1_edc_err,
+				  mode2f2_edc_err,
+				  total_ecc_p_err, total_ecc_q_err, total_edc_err);
+				  
     //
     // Success
     //
@@ -617,8 +750,6 @@ int main(int argc, char **argv)
     DPRINTF("Normalizing argv[0].\n");
     normalize_argv0(argv[0]);
 
-    DPRINTF("Showing banner.\n");
-    banner();
 
     //
     // Check command line
@@ -630,11 +761,17 @@ int main(int argc, char **argv)
             //
             // Initialize the ECC/EDC tables
             //
+			open_csv_file();
             eccedc_init();
-            if(ecmify(infilename)) { goto error; }
+            if(ecmify(infilename)) 
+			{ 
+				goto error; 
+			}
             break;
         default: goto usage;
     }
+	
+	close_csv_file();
 
     //
     // Success
@@ -649,6 +786,7 @@ usage:
 
 error:
     returncode = 1;
+	close_csv_file();
     goto done;
 
 done:
